@@ -1,0 +1,69 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Deploys the whole application as ONE web service. The Express server serves
+# both the REST API and the built React SPA, which means the browser talks to a
+# single origin: no CORS configuration, and the WebSocket inherits the page's
+# host and TLS automatically. Splitting them into a static site plus an API
+# service would require both, for no benefit at this size.
+#
+# SECRETS ARE NOT IN THIS FILE.
+#   MONGO_URI  -> `sync: false`, so Render prompts for it at deploy time and
+#                 stores it encrypted. It must never be committed: this repo is
+#                 public, and a connection string is a credential.
+#   JWT_SECRET -> `generateValue: true`, so Render generates a strong random
+#                 value once and keeps it stable across deploys. Sessions
+#                 survive redeploys; nobody has to invent a secret by hand.
+
+services:
+  - type: web
+    name: multi-agent-trading-terminal
+    runtime: node
+    plan: free          # upgrade to `starter` to stop the service sleeping when idle
+    region: oregon      # oregon | ohio | virginia | frankfurt | singapore
+    branch: main
+    autoDeploy: true
+
+    # `--include=dev` is required: NODE_ENV=production makes `npm ci` skip
+    # devDependencies, and Vite (the build tool itself) lives there. Without it
+    # the frontend build fails with "vite: not found".
+    buildCommand: npm run render-build
+    startCommand: npm run render-start
+
+    # Render restarts the instance if this stops returning 2xx.
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+
+      - key: NODE_ENV
+        value: production
+
+      # Set in the Render dashboard, never in the repo.
+      - key: MONGO_URI
+        sync: false
+
+      # Generated once by Render and held stable across deploys.
+      - key: JWT_SECRET
+        generateValue: true
+
+      # Real daily prices and macro from Yahoo Finance.
+      - key: MARKET_DATA_PROVIDER
+        value: yahoo
+
+      # Fail loudly rather than serving invented prices if a live fetch breaks.
+      - key: ALLOW_SYNTHETIC_FALLBACK
+        value: "false"
+
+      - key: EVENT_BUS
+        value: memory
+
+      # Risk policy — every limit the engine enforces, tunable without a rebuild.
+      - key: MAX_RISK_PER_TRADE_PCT
+        value: "1.0"
+      - key: HARD_MAX_POSITION_PCT
+        value: "5.0"
+      - key: MAX_PORTFOLIO_HEAT_PCT
+        value: "6.0"
+      - key: KELLY_FRACTION
+        value: "0.25"

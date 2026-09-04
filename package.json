@@ -10,6 +10,8 @@
     "test": "npm --prefix backend test",
     "smoke": "npm --prefix backend run smoke",
     "seed": "npm --prefix backend run seed",
-    "build": "npm --prefix frontend run build"
+    "build": "npm --prefix frontend run build",
+    "render-build": "npm --prefix backend ci --omit=dev && npm --prefix frontend ci --include=dev && npm --prefix frontend run build",
+    "render-start": "npm --prefix backend start"
   }
 }

@@ -2,6 +2,9 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import http from 'node:http';
+import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 
 import { connectDB, isDbConnected } from './config/db.js';
@@ -43,6 +46,33 @@ app.use('/api/auth', authRoutes);
 // neutral default portfolio); anything that touches your holdings does not.
 app.use('/api', optionalAuth, analysisRoutes);
 app.use('/api/portfolio', requireAuth, portfolioRoutes);
+
+/* ----------------------- static frontend ----------------------- */
+// In production the built SPA is served by this same process, so the browser
+// talks to one origin: no CORS, and the WebSocket shares the page's host and
+// TLS. In development Vite serves the app and proxies here instead, so this
+// block is simply inert (no dist directory exists).
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const distPath = path.resolve(__dirname, '../frontend/dist');
+
+if (fs.existsSync(path.join(distPath, 'index.html'))) {
+  // Hashed asset filenames are safe to cache hard; index.html must not be.
+  app.use(express.static(distPath, {
+    maxAge: '1y',
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+    },
+  }));
+
+  // SPA fallback: any non-API path renders the app shell so client-side routes
+  // survive a hard refresh. Registered after the API so it cannot shadow it.
+  app.get(/^(?!\/api\/|\/ws).*/, (_req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+  console.log(`[server] serving the built frontend from ${distPath}`);
+} else {
+  console.log('[server] no frontend build found — API only (run the Vite dev server for the UI)');
+}
 
 app.use((_req, res) => res.status(404).json({ ok: false, error: 'Not found' }));
 
@@ -123,7 +153,7 @@ const PORT = process.env.PORT || 4000;
 async function start() {
   await connectDB();
   await initEventBus();
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n  Multi-Agent Trading Engine`);
     console.log(`  REST      http://localhost:${PORT}/api`);
     console.log(`  WebSocket ws://localhost:${PORT}/ws`);

@@ -21,6 +21,7 @@ the 5% single-idea ceiling.
 - [Daily Picks](#daily-picks)
 - [Backtesting & audit](#backtesting--audit)
 - [Accounts & security](#accounts--security)
+- [Deployment](#deployment)
 - [API reference](#api-reference)
 - [Configuration](#configuration)
 - [Testing](#testing)
@@ -446,6 +447,68 @@ degradation figure.
 CSRF protection, no email verification or password reset, and tokens live in
 `localStorage`. Treat it as a local single-user tool until those are addressed.
 
+
+---
+
+## Deployment
+
+A Render Blueprint ships at **`render.yaml`** in the repository root (the default path
+Render looks for; point it elsewhere in the dashboard if you move it).
+
+### One service, not two
+
+The blueprint deploys a **single web service**. Express serves the REST API, the WebSocket
+and the built React SPA from the same origin, which means:
+
+- no CORS configuration to get wrong,
+- the WebSocket inherits the page's host and TLS (`wss://`) automatically,
+- no `VITE_API_BASE_URL` to keep in sync between environments.
+
+Splitting it into a static site plus an API service would require all three, and buys
+nothing at this size.
+
+### Deploying
+
+1. **Atlas — allow Render to connect.** In Atlas → *Network Access*, add `0.0.0.0/0`.
+   Render's outbound IPs are dynamic on the free and starter plans, so an IP allowlist
+   cannot work. Access is then controlled by the database user's credentials alone, which
+   makes rotating a leaked password the only real remedy.
+2. **Atlas — copy the connection string** and add the database name before the query
+   string: `…mongodb.net/trading_app?retryWrites=true&w=majority`. Without it Mongoose
+   silently writes to a database called `test`.
+3. **Render → New → Blueprint**, point it at this repository.
+4. Render prompts for **`MONGO_URI`** (declared `sync: false`, so it is never stored in
+   git). Paste the string from step 2. **`JWT_SECRET`** is generated automatically and held
+   stable across deploys, so sessions survive a redeploy.
+5. Deploy. `/api/health` is the health check; the service restarts if it stops returning
+   2xx.
+
+### What the blueprint sets
+
+| Variable | Source | Why |
+|---|---|---|
+| `MONGO_URI` | **dashboard** (`sync: false`) | A connection string is a credential and this repo is public |
+| `JWT_SECRET` | **generated** by Render | Strong, stable, nobody has to invent one |
+| `NODE_ENV` | `production` | Makes `JWT_SECRET` mandatory and the database non-optional |
+| `MARKET_DATA_PROVIDER` | `yahoo` | Real daily prices and macro |
+| `ALLOW_SYNTHETIC_FALLBACK` | `false` | Fail loudly rather than serve invented prices |
+| `NODE_VERSION` | `22` | Pinned so a Render default bump cannot break the build |
+
+### Two production behaviours that differ from development
+
+- **The database is no longer optional.** In development a missing MongoDB degrades to an
+  in-memory store. In production that is not graceful degradation, it is silent data loss —
+  every account and position would vanish on the next restart — so the server refuses to
+  start without a reachable database.
+- **`JWT_SECRET` is mandatory.** Development derives a stable per-machine value; production
+  throws without one, so tokens can never be signed with a guessable key.
+
+### Free plan caveats
+
+Render's free tier sleeps after ~15 minutes idle, so the first request afterwards waits for
+a cold start (and the screener's first run then repopulates its caches). Upgrade to
+`starter` in `render.yaml` to keep it warm.
+
 ---
 
 ## API reference
@@ -485,7 +548,7 @@ mirrored orchestration events.
 |---|---|---|
 | `MARKET_DATA_PROVIDER` | `yahoo` | `yahoo` (real daily bars) or `synthetic` (offline) |
 | `ALLOW_SYNTHETIC_FALLBACK` | `false` | Whether a failed live fetch may substitute generated prices |
-| `MONGO_URI` | localhost | Optional — falls back to an in-memory repository |
+| `MONGO_URI` | localhost | Local mongod or an Atlas SRV string. Include the database name. Optional in dev, **required in production** |
 | `EVENT_BUS` | `memory` | `memory` or `kafka` |
 | `JWT_SECRET` | dev-derived | **Required** in production |
 | `MAX_RISK_PER_TRADE_PCT` | `1.0` | Per-idea risk ceiling |
