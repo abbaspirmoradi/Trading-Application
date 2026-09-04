@@ -1,0 +1,29 @@
+{
+  "name": "trading-app-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Multi-agent NASDAQ analysis and decision engine",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node scripts/seed.js",
+    "smoke": "node scripts/smoke.js",
+    "test": "node --test scripts/*.test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.5.1",
+    "ws": "^8.18.0"
+  },
+  "optionalDependencies": {
+    "kafkajs": "^2.2.4"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

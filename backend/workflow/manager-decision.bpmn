@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Camunda-compatible BPMN 2.0 definition of the Manager Agent's decision loop.
+
+  The in-process orchestrator (engine/ManagerOrchestrator.js) implements exactly
+  these stages and is the default execution path. This file exists so the same
+  process can be deployed to a Camunda 7/8 engine when an organisation needs
+  external task workers, human-in-the-loop approval steps, incident handling and
+  a durable audit trail. Each serviceTask delegates to a topic that a worker in
+  this codebase can subscribe to.
+-->
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  targetNamespace="http://trading-app/manager"
+                  id="manager_definitions">
+
+  <bpmn:process id="manager_decision_process" name="Manager Agent Decision Pipeline" isExecutable="true">
+
+    <bpmn:startEvent id="start_analysis" name="Analysis requested">
+      <bpmn:outgoing>flow_to_quorum</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="flow_to_quorum" sourceRef="start_analysis" targetRef="quorum_validation" />
+
+    <!-- 1. Quorum ======================================================= -->
+    <bpmn:businessRuleTask id="quorum_validation" name="Quorum Validation"
+                           camunda:type="external" camunda:topic="quorum-validation">
+      <bpmn:incoming>flow_to_quorum</bpmn:incoming>
+      <bpmn:outgoing>flow_to_quorum_gate</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+    <bpmn:sequenceFlow id="flow_to_quorum_gate" sourceRef="quorum_validation" targetRef="quorum_gateway" />
+
+    <bpmn:exclusiveGateway id="quorum_gateway" name="Quorum met?">
+      <bpmn:incoming>flow_to_quorum_gate</bpmn:incoming>
+      <bpmn:outgoing>flow_quorum_pass</bpmn:outgoing>
+      <bpmn:outgoing>flow_quorum_fail</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="flow_quorum_fail" name="no" sourceRef="quorum_gateway" targetRef="end_no_decision">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${!quorumPassed}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_quorum_pass" name="yes" sourceRef="quorum_gateway" targetRef="agent_fanout">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${quorumPassed}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <!-- 2. Parallel agent execution ====================================== -->
+    <bpmn:parallelGateway id="agent_fanout" name="Dispatch to active agents">
+      <bpmn:incoming>flow_quorum_pass</bpmn:incoming>
+      <bpmn:outgoing>flow_fan_technical</bpmn:outgoing>
+      <bpmn:outgoing>flow_fan_fundamental</bpmn:outgoing>
+      <bpmn:outgoing>flow_fan_quant</bpmn:outgoing>
+      <bpmn:outgoing>flow_fan_macro</bpmn:outgoing>
+      <bpmn:outgoing>flow_fan_risk</bpmn:outgoing>
+    </bpmn:parallelGateway>
+
+    <bpmn:sequenceFlow id="flow_fan_technical" sourceRef="agent_fanout" targetRef="technical_cluster" />
+    <bpmn:sequenceFlow id="flow_fan_fundamental" sourceRef="agent_fanout" targetRef="fundamental_cluster" />
+    <bpmn:sequenceFlow id="flow_fan_quant" sourceRef="agent_fanout" targetRef="quant_cluster" />
+    <bpmn:sequenceFlow id="flow_fan_macro" sourceRef="agent_fanout" targetRef="macro_cluster" />
+    <bpmn:sequenceFlow id="flow_fan_risk" sourceRef="agent_fanout" targetRef="risk_cluster" />
+
+    <bpmn:serviceTask id="technical_cluster" name="Technical Cluster (Stage, Pattern, Volume, RS)"
+                      camunda:type="external" camunda:topic="agent-technical">
+      <bpmn:incoming>flow_fan_technical</bpmn:incoming>
+      <bpmn:outgoing>flow_join_technical</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="fundamental_cluster" name="Fundamental Cluster (CAN SLIM)"
+                      camunda:type="external" camunda:topic="agent-fundamental">
+      <bpmn:incoming>flow_fan_fundamental</bpmn:incoming>
+      <bpmn:outgoing>flow_join_fundamental</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="quant_cluster" name="Quant Cluster (Fractional Differentiation)"
+                      camunda:type="external" camunda:topic="agent-quant">
+      <bpmn:incoming>flow_fan_quant</bpmn:incoming>
+      <bpmn:outgoing>flow_join_quant</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="macro_cluster" name="Macro &amp; Sentiment Cluster"
+                      camunda:type="external" camunda:topic="agent-macro">
+      <bpmn:incoming>flow_fan_macro</bpmn:incoming>
+      <bpmn:outgoing>flow_join_macro</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="risk_cluster" name="Risk &amp; Execution Cluster"
+                      camunda:type="external" camunda:topic="agent-risk">
+      <bpmn:incoming>flow_fan_risk</bpmn:incoming>
+      <bpmn:outgoing>flow_join_risk</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:sequenceFlow id="flow_join_technical" sourceRef="technical_cluster" targetRef="agent_join" />
+    <bpmn:sequenceFlow id="flow_join_fundamental" sourceRef="fundamental_cluster" targetRef="agent_join" />
+    <bpmn:sequenceFlow id="flow_join_quant" sourceRef="quant_cluster" targetRef="agent_join" />
+    <bpmn:sequenceFlow id="flow_join_macro" sourceRef="macro_cluster" targetRef="agent_join" />
+    <bpmn:sequenceFlow id="flow_join_risk" sourceRef="risk_cluster" targetRef="agent_join" />
+
+    <bpmn:parallelGateway id="agent_join" name="Collect agent outputs">
+      <bpmn:incoming>flow_join_technical</bpmn:incoming>
+      <bpmn:incoming>flow_join_fundamental</bpmn:incoming>
+      <bpmn:incoming>flow_join_quant</bpmn:incoming>
+      <bpmn:incoming>flow_join_macro</bpmn:incoming>
+      <bpmn:incoming>flow_join_risk</bpmn:incoming>
+      <bpmn:outgoing>flow_to_consensus</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:sequenceFlow id="flow_to_consensus" sourceRef="agent_join" targetRef="confidence_matrix" />
+
+    <!-- 3. Consensus ===================================================== -->
+    <bpmn:serviceTask id="confidence_matrix" name="Weighted Confidence Matrix"
+                      camunda:type="external" camunda:topic="confidence-matrix">
+      <bpmn:incoming>flow_to_consensus</bpmn:incoming>
+      <bpmn:outgoing>flow_to_veto</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="flow_to_veto" sourceRef="confidence_matrix" targetRef="veto_engine" />
+
+    <!-- 4. Vetoes ======================================================== -->
+    <bpmn:businessRuleTask id="veto_engine" name="Hard Veto Check (Stage 4 / Risk / Volume)"
+                           camunda:type="external" camunda:topic="veto-engine"
+                           camunda:resultVariable="vetoResult">
+      <bpmn:incoming>flow_to_veto</bpmn:incoming>
+      <bpmn:outgoing>flow_to_veto_gate</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+    <bpmn:sequenceFlow id="flow_to_veto_gate" sourceRef="veto_engine" targetRef="veto_gateway" />
+
+    <bpmn:exclusiveGateway id="veto_gateway" name="Blocking veto?">
+      <bpmn:incoming>flow_to_veto_gate</bpmn:incoming>
+      <bpmn:outgoing>flow_veto_blocked</bpmn:outgoing>
+      <bpmn:outgoing>flow_veto_clear</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="flow_veto_blocked" name="blocked" sourceRef="veto_gateway" targetRef="end_rejected">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${vetoBlocked}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_veto_clear" name="clear" sourceRef="veto_gateway" targetRef="meta_labeling">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${!vetoBlocked}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <!-- 5. Meta-labelling and sizing ===================================== -->
+    <bpmn:serviceTask id="meta_labeling" name="Meta-Label: P(target before stop)"
+                      camunda:type="external" camunda:topic="meta-labeling">
+      <bpmn:incoming>flow_veto_clear</bpmn:incoming>
+      <bpmn:outgoing>flow_to_kelly</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="flow_to_kelly" sourceRef="meta_labeling" targetRef="kelly_sizing" />
+
+    <bpmn:serviceTask id="kelly_sizing" name="Fractional Kelly Position Sizing"
+                      camunda:type="external" camunda:topic="kelly-sizing">
+      <bpmn:incoming>flow_to_kelly</bpmn:incoming>
+      <bpmn:outgoing>flow_to_contract</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="flow_to_contract" sourceRef="kelly_sizing" targetRef="execution_contract" />
+
+    <!-- 6. Execution contract ============================================ -->
+    <bpmn:serviceTask id="execution_contract" name="Synthesise Execution Contract"
+                      camunda:type="external" camunda:topic="execution-contract">
+      <bpmn:incoming>flow_to_contract</bpmn:incoming>
+      <bpmn:outgoing>flow_to_end</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="flow_to_end" sourceRef="execution_contract" targetRef="end_decision" />
+
+    <bpmn:endEvent id="end_decision" name="Decision issued">
+      <bpmn:incoming>flow_to_end</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="end_rejected" name="Trade rejected by veto">
+      <bpmn:incoming>flow_veto_blocked</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="end_no_decision" name="No quorum - no decision">
+      <bpmn:incoming>flow_quorum_fail</bpmn:incoming>
+    </bpmn:endEvent>
+
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="manager_decision_process" />
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

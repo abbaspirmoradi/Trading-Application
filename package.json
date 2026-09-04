@@ -1,0 +1,15 @@
+{
+  "name": "multi-agent-trading-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multi-agent NASDAQ analysis, decision and risk-management platform",
+  "scripts": {
+    "install:all": "npm --prefix backend install && npm --prefix frontend install",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "test": "npm --prefix backend test",
+    "smoke": "npm --prefix backend run smoke",
+    "seed": "npm --prefix backend run seed",
+    "build": "npm --prefix frontend run build"
+  }
+}
