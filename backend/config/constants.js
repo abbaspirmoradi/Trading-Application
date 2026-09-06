@@ -17,20 +17,62 @@ export const BREAKOUT = {
   volumeLookback: 20,
 };
 
-export const BARRIERS = {
-  profitAtrMultiple: 4.0,
-  stopAtrMultiple: 2.0,
-  // A stop closer than this to entry sits inside normal daily noise: it will be
-  // hit by random fluctuation rather than by the thesis failing.
-  minStopAtrMultiple: 0.8,
-  atrPeriod: 14,
-  maxHoldingDays: 60,           // vertical (time) barrier
-  minRewardRisk: 1.8,
-  // A breakout trigger further than this above spot is not a trade you can place
-  // today — it is a level to watch. Buying a stop 30% above the market is how a
-  // detected pattern turns into a fictional entry.
-  maxEntryDistancePct: 8,
+/**
+ * Barrier profiles by holding horizon.
+ *
+ * The horizon is not a cosmetic setting: it determines the labels the
+ * meta-model learns from, the width of every stop, and how many independent
+ * observations the history can yield. A stop sized for a two-week swing is
+ * inside the noise of a two-year hold, and a 60-day time barrier would close a
+ * position thesis before it has had a chance to be right or wrong.
+ */
+export const HORIZON_PROFILES = {
+  // Weeks to months.
+  SWING: {
+    label: 'Swing (weeks to months)',
+    profitAtrMultiple: 4.0,
+    stopAtrMultiple: 2.0,
+    minStopAtrMultiple: 0.8,
+    atrPeriod: 14,
+    maxHoldingDays: 60,
+    minRewardRisk: 1.8,
+    maxEntryDistancePct: 8,
+    // History needed for indicators in the agent context.
+    analysisDays: 750,
+  },
+
+  // Months to years. Wider stops so ordinary volatility cannot close a
+  // multi-month thesis, a one-year vertical barrier, and five years of context
+  // so the 30-week MA and 52-week range are measured against a real cycle.
+  POSITION: {
+    label: 'Position (months to years)',
+    profitAtrMultiple: 10.0,
+    stopAtrMultiple: 4.0,
+    minStopAtrMultiple: 2.0,
+    atrPeriod: 20,
+    maxHoldingDays: 252,
+    minRewardRisk: 2.0,
+    // A position entry does not need to be timed to the tick, so a trigger may
+    // sit further from spot before it stops being actionable.
+    maxEntryDistancePct: 12,
+    analysisDays: 1300,
+  },
 };
+
+export const HORIZON = (process.env.TRADING_HORIZON || 'POSITION').toUpperCase();
+
+export const BARRIERS = {
+  ...(HORIZON_PROFILES[HORIZON] ?? HORIZON_PROFILES.POSITION),
+  horizon: HORIZON_PROFILES[HORIZON] ? HORIZON : 'POSITION',
+};
+
+/**
+ * Maximum daily history to request for backtesting and model fitting. At a
+ * position horizon the label window is a year wide, so a short history yields
+ * almost no independent observations — 20 years is the difference between a
+ * testable sample and a meaningless one.
+ */
+export const HISTORY_MAX_DAYS = 5040;
 
 export const QUORUM = {
   minActiveAgents: 3,

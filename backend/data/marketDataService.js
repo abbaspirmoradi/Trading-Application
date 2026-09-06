@@ -10,7 +10,7 @@
 import {
   generateBars, generateFundamentals, generateOptionsChainSummary, generateNews,
 } from './syntheticMarket.js';
-import { BENCHMARK } from '../config/constants.js';
+import { BENCHMARK, BARRIERS, HISTORY_MAX_DAYS } from '../config/constants.js';
 
 const CACHE_TTL_MS = 60_000;
 const cache = new Map();
@@ -31,13 +31,26 @@ async function cachedAsync(key, producer) {
   return value;
 }
 
+/** Longest daily history available, for backtesting and model fitting. */
+export async function getFullHistory(ticker) {
+  return getBars(ticker, HISTORY_MAX_DAYS);
+}
+
 export function provider() {
   return (process.env.MARKET_DATA_PROVIDER || 'synthetic').toLowerCase();
 }
 
 async function fetchYahooBars(ticker, days) {
-  const range = days > 500 ? '5y' : days > 250 ? '2y' : '1y';
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${range}&interval=1d`;
+  // Explicit period1/period2 rather than `range`: `range=max` silently drops to
+  // a coarser interval (a few hundred bars spanning decades), and `range` caps
+  // out at 10y. Timestamps return true daily bars for as far back as requested,
+  // which a position horizon needs.
+  const now = Math.floor(Date.now() / 1000);
+  // 365/252 converts trading days to calendar days, plus a margin for holidays.
+  const lookbackSeconds = Math.ceil(days * (365 / 252) * 1.05) * 24 * 3600;
+  const period1 = now - lookbackSeconds;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}`
+    + `?period1=${period1}&period2=${now}&interval=1d`;
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; trading-app/1.0)' },
     signal: AbortSignal.timeout(8000),
@@ -62,7 +75,9 @@ async function fetchYahooBars(ticker, days) {
       volume: q.volume[i] ?? 0,
     });
   }
-  if (bars.length < 60) throw new Error('yahoo: insufficient history');
+  // A recent IPO genuinely has less history than requested; that is not an
+  // error, but too little to analyse is.
+  if (bars.length < 260) throw new Error(`yahoo: only ${bars.length} bars available, need at least 260`);
   return bars.slice(-days);
 }
 
@@ -85,7 +100,7 @@ function fallbackAllowed() {
 }
 
 /** Daily OHLCV bars, newest last. */
-export async function getBars(ticker, days = 750) {
+export async function getBars(ticker, days = BARRIERS.analysisDays) {
   const symbol = ticker.toUpperCase();
   return cachedAsync(`bars:${symbol}:${days}:${provider()}`, async () => {
     if (provider() === 'yahoo') {
@@ -125,7 +140,7 @@ export async function getQuote(ticker) {
   };
 }
 
-export async function getBenchmarkBars(days = 750) {
+export async function getBenchmarkBars(days = BARRIERS.analysisDays) {
   return getBars(BENCHMARK, days);
 }
 
@@ -154,7 +169,7 @@ export async function getMacro() {
  * Assembles the single context object every agent receives. Built once per
  * analysis run so the 11 agents share one consistent snapshot of the world.
  */
-export async function buildMarketContext(ticker, { timeframe = '1D', days = 750 } = {}) {
+export async function buildMarketContext(ticker, { timeframe = '1D', days = BARRIERS.analysisDays } = {}) {
   const symbol = ticker.toUpperCase();
   const [bars, benchmarkBars, macro] = await Promise.all([
     getBars(symbol, days), getBenchmarkBars(days), getMacro(),

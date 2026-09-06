@@ -8,6 +8,7 @@ import { runAnalysis } from '../engine/ManagerOrchestrator.js';
 import { buildMarketContext } from '../data/marketDataService.js';
 import { AGENT_IDS } from '../agents/index.js';
 import { fracDiff, adfTest } from '../lib/indicators.js';
+import { BARRIERS } from '../config/constants.js';
 import { seededRandom, adfPValue } from '../lib/stats.js';
 
 const agent = (agentId, cluster, payload, score = 0) => ({
@@ -131,8 +132,27 @@ test('Barriers: a short mirrors the long geometry', () => {
 });
 
 test('Barriers: structure is preferred over the ATR stop when it is close enough', () => {
+  // Derived from the ACTIVE horizon profile rather than hardcoded, so the test
+  // asserts the rule (prefer viable structure) instead of numbers that only
+  // hold for one holding period.
+  const atrNow = 2;
+  const minDistance = BARRIERS.minStopAtrMultiple * atrNow;
+  const atrDistance = BARRIERS.stopAtrMultiple * atrNow;
+  const wanted = (minDistance + atrDistance) / 2; // comfortably inside both bounds
+  const swingLow = (100 - wanted) / 0.985;        // undo the buffer buildBarriers applies
+
+  const b = buildBarriers({ price: 100, atrNow, ma30w: 60, swingLow, swingHigh: 104, direction: 'LONG' });
+  assert.match(b.stopBasis, /reaction low/, `stop basis was "${b.stopBasis}" at horizon ${BARRIERS.horizon}`);
+});
+
+test('Barriers: the position horizon rejects a stop that a swing horizon would accept', () => {
+  // A stop 3.5% away is reasonable over weeks and pure noise over years.
   const b = buildBarriers({ price: 100, atrNow: 2, ma30w: 90, swingLow: 98, swingHigh: 104, direction: 'LONG' });
-  assert.match(b.stopBasis, /reaction low/);
+  const distance = 100 - b.stopLoss;
+  assert.ok(
+    distance >= BARRIERS.minStopAtrMultiple * 2,
+    `stop sat ${distance.toFixed(2)} away, inside the ${(BARRIERS.minStopAtrMultiple * 2).toFixed(2)} noise floor for ${BARRIERS.horizon}`,
+  );
 });
 
 test('Barriers: absurdly distant structure falls back to the volatility stop', () => {

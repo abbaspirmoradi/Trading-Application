@@ -16,7 +16,7 @@ const TRADING_DAYS = 750;
 // price path* for the same ticker. Every request is therefore served as a suffix
 // of one canonical series, which keeps the quote strip, the chart and the
 // analysis all quoting the same price.
-const CANONICAL_DAYS = 1500;
+const CANONICAL_DAYS = 5100;
 
 function gaussian(rnd) {
   // Box-Muller
