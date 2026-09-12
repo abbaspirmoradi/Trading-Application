@@ -309,15 +309,12 @@ function buildConsensus(results, performanceWeights) {
 }
 
 const BASE_WEIGHT = {
-  CAN_SLIM_Agent: 1.0,
   Weinstein_Stage_Agent: 1.4,
   Chart_Pattern_Agent: 1.1,
   Volume_OrderFlow_Agent: 1.2,
   Relative_Strength_Agent: 1.3,
   Fractional_Quant_Agent: 0.9,
   Intermarket_Macro_Agent: 1.0,
-  Geopolitical_News_Agent: 0.7,
-  Options_Sentiment_Agent: 0.8,
   Portfolio_Risk_Agent: 1.0,
   Triple_Barrier_Exit_Agent: 0.6,
 };

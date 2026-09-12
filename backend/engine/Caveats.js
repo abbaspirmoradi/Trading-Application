@@ -123,7 +123,7 @@ export function buildCaveats({ meta, consensus, agentResults, dataSources, direc
 
   /* ---- Inputs that are not real ---- */
   const modelledAgents = (agentResults || []).filter((r) => {
-    const feed = { Intermarket_Macro_Agent: 'macro', Geopolitical_News_Agent: 'news', Options_Sentiment_Agent: 'options', CAN_SLIM_Agent: 'fundamentals' }[r.agentId];
+    const feed = { Intermarket_Macro_Agent: 'macro' }[r.agentId];
     return feed && dataSources?.[feed] === 'MODELLED';
   });
   if (modelledAgents.length) {

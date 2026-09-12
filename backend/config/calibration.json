@@ -1,177 +1,123 @@
 {
-  "generatedAt": "2026-09-12T01:13:40.229Z",
+  "generatedAt": "2026-09-12T03:53:08.484Z",
   "horizon": "POSITION",
   "universeSize": 52,
   "decisionsSampled": 52,
   "agentRedundancy": {
     "votingAgents": [
-      "CAN_SLIM_Agent",
       "Weinstein_Stage_Agent",
       "Chart_Pattern_Agent",
       "Volume_OrderFlow_Agent",
       "Relative_Strength_Agent",
       "Fractional_Quant_Agent",
-      "Intermarket_Macro_Agent",
-      "Geopolitical_News_Agent",
-      "Options_Sentiment_Agent"
+      "Intermarket_Macro_Agent"
     ],
     "correlationMatrix": {
-      "CAN_SLIM_Agent": {
-        "CAN_SLIM_Agent": 1,
-        "Weinstein_Stage_Agent": 0.7,
-        "Chart_Pattern_Agent": 0.177,
-        "Volume_OrderFlow_Agent": 0.107,
-        "Relative_Strength_Agent": 0.86,
-        "Fractional_Quant_Agent": 0.658,
-        "Intermarket_Macro_Agent": 0,
-        "Geopolitical_News_Agent": -0.09,
-        "Options_Sentiment_Agent": 0.068
-      },
       "Weinstein_Stage_Agent": {
-        "CAN_SLIM_Agent": 0.7,
         "Weinstein_Stage_Agent": 1,
-        "Chart_Pattern_Agent": -0.06,
-        "Volume_OrderFlow_Agent": 0.238,
-        "Relative_Strength_Agent": 0.768,
-        "Fractional_Quant_Agent": 0.583,
-        "Intermarket_Macro_Agent": 0,
-        "Geopolitical_News_Agent": -0.042,
-        "Options_Sentiment_Agent": 0.062
+        "Chart_Pattern_Agent": 0.021,
+        "Volume_OrderFlow_Agent": 0.257,
+        "Relative_Strength_Agent": 0.777,
+        "Fractional_Quant_Agent": 0.607,
+        "Intermarket_Macro_Agent": 0
       },
       "Chart_Pattern_Agent": {
-        "CAN_SLIM_Agent": 0.177,
-        "Weinstein_Stage_Agent": -0.06,
+        "Weinstein_Stage_Agent": 0.021,
         "Chart_Pattern_Agent": 1,
-        "Volume_OrderFlow_Agent": 0.126,
+        "Volume_OrderFlow_Agent": 0.137,
         "Relative_Strength_Agent": 0.189,
-        "Fractional_Quant_Agent": 0.081,
-        "Intermarket_Macro_Agent": 0,
-        "Geopolitical_News_Agent": -0.042,
-        "Options_Sentiment_Agent": -0.169
+        "Fractional_Quant_Agent": 0.085,
+        "Intermarket_Macro_Agent": 0
       },
       "Volume_OrderFlow_Agent": {
-        "CAN_SLIM_Agent": 0.107,
-        "Weinstein_Stage_Agent": 0.238,
-        "Chart_Pattern_Agent": 0.126,
+        "Weinstein_Stage_Agent": 0.257,
+        "Chart_Pattern_Agent": 0.137,
         "Volume_OrderFlow_Agent": 1,
-        "Relative_Strength_Agent": 0.157,
-        "Fractional_Quant_Agent": -0.067,
-        "Intermarket_Macro_Agent": 0,
-        "Geopolitical_News_Agent": -0.093,
-        "Options_Sentiment_Agent": 0.001
+        "Relative_Strength_Agent": 0.185,
+        "Fractional_Quant_Agent": -0.038,
+        "Intermarket_Macro_Agent": 0
       },
       "Relative_Strength_Agent": {
-        "CAN_SLIM_Agent": 0.86,
-        "Weinstein_Stage_Agent": 0.768,
+        "Weinstein_Stage_Agent": 0.777,
         "Chart_Pattern_Agent": 0.189,
-        "Volume_OrderFlow_Agent": 0.157,
+        "Volume_OrderFlow_Agent": 0.185,
         "Relative_Strength_Agent": 1,
-        "Fractional_Quant_Agent": 0.556,
-        "Intermarket_Macro_Agent": 0,
-        "Geopolitical_News_Agent": -0.01,
-        "Options_Sentiment_Agent": 0.164
+        "Fractional_Quant_Agent": 0.57,
+        "Intermarket_Macro_Agent": 0
       },
       "Fractional_Quant_Agent": {
-        "CAN_SLIM_Agent": 0.658,
-        "Weinstein_Stage_Agent": 0.583,
-        "Chart_Pattern_Agent": 0.081,
-        "Volume_OrderFlow_Agent": -0.067,
-        "Relative_Strength_Agent": 0.556,
+        "Weinstein_Stage_Agent": 0.607,
+        "Chart_Pattern_Agent": 0.085,
+        "Volume_OrderFlow_Agent": -0.038,
+        "Relative_Strength_Agent": 0.57,
         "Fractional_Quant_Agent": 1,
-        "Intermarket_Macro_Agent": 0,
-        "Geopolitical_News_Agent": -0.025,
-        "Options_Sentiment_Agent": -0.011
+        "Intermarket_Macro_Agent": 0
       },
       "Intermarket_Macro_Agent": {
-        "CAN_SLIM_Agent": 0,
         "Weinstein_Stage_Agent": 0,
         "Chart_Pattern_Agent": 0,
         "Volume_OrderFlow_Agent": 0,
         "Relative_Strength_Agent": 0,
         "Fractional_Quant_Agent": 0,
-        "Intermarket_Macro_Agent": 1,
-        "Geopolitical_News_Agent": 0,
-        "Options_Sentiment_Agent": 0
-      },
-      "Geopolitical_News_Agent": {
-        "CAN_SLIM_Agent": -0.09,
-        "Weinstein_Stage_Agent": -0.042,
-        "Chart_Pattern_Agent": -0.042,
-        "Volume_OrderFlow_Agent": -0.093,
-        "Relative_Strength_Agent": -0.01,
-        "Fractional_Quant_Agent": -0.025,
-        "Intermarket_Macro_Agent": 0,
-        "Geopolitical_News_Agent": 1,
-        "Options_Sentiment_Agent": 0.137
-      },
-      "Options_Sentiment_Agent": {
-        "CAN_SLIM_Agent": 0.068,
-        "Weinstein_Stage_Agent": 0.062,
-        "Chart_Pattern_Agent": -0.169,
-        "Volume_OrderFlow_Agent": 0.001,
-        "Relative_Strength_Agent": 0.164,
-        "Fractional_Quant_Agent": -0.011,
-        "Intermarket_Macro_Agent": 0,
-        "Geopolitical_News_Agent": 0.137,
-        "Options_Sentiment_Agent": 1
+        "Intermarket_Macro_Agent": 1
       }
     },
-    "effectiveOpinionsAllVoters": 3.77,
+    "effectiveOpinionsAllVoters": 3.07,
     "mostRedundantPairs": [
       {
-        "a": "CAN_SLIM_Agent",
-        "b": "Relative_Strength_Agent",
-        "r": 0.86
-      },
-      {
         "a": "Weinstein_Stage_Agent",
         "b": "Relative_Strength_Agent",
-        "r": 0.768
-      },
-      {
-        "a": "CAN_SLIM_Agent",
-        "b": "Weinstein_Stage_Agent",
-        "r": 0.7
-      },
-      {
-        "a": "CAN_SLIM_Agent",
-        "b": "Fractional_Quant_Agent",
-        "r": 0.658
+        "r": 0.777
       },
       {
         "a": "Weinstein_Stage_Agent",
         "b": "Fractional_Quant_Agent",
-        "r": 0.583
+        "r": 0.607
+      },
+      {
+        "a": "Relative_Strength_Agent",
+        "b": "Fractional_Quant_Agent",
+        "r": 0.57
+      },
+      {
+        "a": "Weinstein_Stage_Agent",
+        "b": "Volume_OrderFlow_Agent",
+        "r": 0.257
+      },
+      {
+        "a": "Chart_Pattern_Agent",
+        "b": "Relative_Strength_Agent",
+        "r": 0.189
       }
     ]
   },
   "patternDetectionRates": {
-    "Cup with Handle": 0.058,
-    "Double Bottom": 0.712,
+    "Cup with Handle": 0.077,
+    "Double Bottom": 0.692,
     "Inverse Head & Shoulders": 0.096,
     "Head & Shoulders Top": 0.135
   },
   "strategyValidation": {
     "method": "Pooled cross-sectional backtest, fixed triple barrier, buy-and-hold benchmark, bootstrap by ticker",
     "period": {
-      "from": "2007-09-11",
-      "to": "2025-09-09"
+      "from": "2007-09-12",
+      "to": "2025-09-10"
     },
     "trades": 1671,
     "winRatePct": 46,
     "meanExcessPerTradePct": 1.4,
     "bootstrapCi95": [
       0.313,
-      2.542
+      2.539
     ],
     "perTradeEdgeSignificant": true,
-    "tickersBeatingBuyAndHold": 6,
+    "tickersBeatingBuyAndHold": 7,
     "tickersCompared": 52,
-    "medianStrategyTotalPct": 385.5,
-    "medianBuyHoldTotalPct": 881.6,
+    "medianStrategyTotalPct": 389.7,
+    "medianBuyHoldTotalPct": 858,
     "medianCagr": {
       "strategy": 10.62,
-      "buyHold": 15.36
+      "buyHold": 15.41
     },
     "medianMaxDrawdown": {
       "strategy": 55.73,

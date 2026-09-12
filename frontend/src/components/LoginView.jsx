@@ -115,7 +115,8 @@ export default function LoginView() {
 
         <p className="mt-4 text-[10.5px] text-slate-600 text-center leading-relaxed">
           Analytical software, not investment advice. It places no orders and connects to no broker.
-          Price data is real; fundamentals, options, news and macro inputs are modelled.
+          Every agent runs on observed price, volume and macro data — there are no fundamentals,
+          options or news inputs, because no honest free source for them exists.
         </p>
       </div>
     </div>

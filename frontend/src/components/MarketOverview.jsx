@@ -82,7 +82,7 @@ function ProvenanceBadge({ provider }) {
         live ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'
       }`}
       title={live
-        ? 'Prices and volume are real daily bars from Yahoo Finance (last completed session). Fundamentals, options, news and macro remain modelled.'
+        ? 'Prices, volume and macro are real daily data from Yahoo Finance (last completed session). Every agent runs on observed inputs.'
         : 'All data is generated locally. No figure on this screen reflects a real market.'}
     >
       {live ? <Radio className="w-2.5 h-2.5" /> : <FlaskConical className="w-2.5 h-2.5" />}

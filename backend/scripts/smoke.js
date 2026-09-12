@@ -90,12 +90,12 @@ await check('login rejects a wrong password without leaking whether the account 
 await check('health endpoint reports healthy', async () => {
   const j = await get('/api/health');
   assert(j.status === 'healthy', 'not healthy');
-  assert(j.agents === 11, `expected 11 agents, got ${j.agents}`);
+  assert(j.agents === 8, `expected 8 agents, got ${j.agents}`);
 });
 
 await check('agent registry returns all 11 agents', async () => {
   const j = await get('/api/agents');
-  assert(j.agents.length === 11, `got ${j.agents.length}`);
+  assert(j.agents.length === 8, `got ${j.agents.length}`);
   assert(j.agents.every((a) => a.agentId && a.cluster), 'malformed agent entry');
 });
 
@@ -107,11 +107,25 @@ await check('pipeline description exposes 7 stages', async () => {
 await check('full analysis returns a complete decision contract', async () => {
   const j = await post('/api/analyze', { ticker: 'NVDA' });
   const d = j.decision;
-  assert(d.agentBreakdown.length === 11, `expected 11 agent results, got ${d.agentBreakdown.length}`);
+  assert(d.agentBreakdown.length === 8, `expected 8 agent results, got ${d.agentBreakdown.length}`);
   assert(typeof d.compositeScore === 'number', 'missing composite score');
   assert(d.executionPlan, 'missing execution plan');
   assert(d.executiveSummary.length > 0, 'empty executive summary');
   assert(d.positionSizing.portfolioPercent <= 5.001, 'position exceeds the 5% cap');
+});
+
+await check('a failed fetch for one symbol cannot relabel another as modelled', async () => {
+  const before = (await post('/api/analyze', { ticker: 'NVDA' })).decision.dataSources.priceVolume;
+  // Force a live-fetch failure on an unrelated symbol.
+  const r = await fetch(`${BASE}/api/analyze`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ticker: 'ZZZZNOPE' }),
+  });
+  const after = (await post('/api/analyze', { ticker: 'NVDA' })).decision.dataSources.priceVolume;
+  if (before === 'LIVE') {
+    assert(r.status === 502, `bogus symbol should 502 under a live provider, got ${r.status}`);
+    assert(after === 'LIVE', `NVDA was relabelled "${after}" after an unrelated failure`);
+  }
 });
 
 await check('analysis honours the active agent subset', async () => {
@@ -120,7 +134,7 @@ await check('analysis honours the active agent subset', async () => {
 });
 
 await check('quorum failure is reported rather than guessed', async () => {
-  const j = await post('/api/analyze', { ticker: 'AAPL', activeAgents: ['CAN_SLIM_Agent'] });
+  const j = await post('/api/analyze', { ticker: 'AAPL', activeAgents: ['Weinstein_Stage_Agent'] });
   assert(j.decision.blocked === true, 'should be blocked');
   assert(/Quorum/.test(j.decision.blockReason), 'missing quorum reason');
 });

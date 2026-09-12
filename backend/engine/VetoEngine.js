@@ -23,7 +23,6 @@ export function evaluateVetoes(results, direction, barriers) {
   const volume = byId.Volume_OrderFlow_Agent;
   const risk = byId.Portfolio_Risk_Agent;
   const macro = byId.Intermarket_Macro_Agent;
-  const geo = byId.Geopolitical_News_Agent;
 
   // 1. Stage 4 veto — the single most important rule in the system.
   if (weinstein?.status === 'COMPLETE' && direction > 0) {
@@ -114,18 +113,7 @@ export function evaluateVetoes(results, direction, barriers) {
     });
   }
 
-  // 5. Geopolitical extremes.
-  if (geo?.status === 'COMPLETE' && geo.payload.globalRiskLevel === 'EXTREME' && direction > 0) {
-    vetoes.push({
-      code: 'GEOPOLITICAL_EXTREME',
-      severity: VETO_SEVERITY.DOWNGRADE,
-      agentId: geo.agentId,
-      message: 'Extreme geopolitical/supply-chain risk pressure in the current news flow — size reduced pending resolution.',
-      sizeMultiplier: 0.5,
-    });
-  }
-
-  // 6. Reward:risk floor — a good idea at a bad price is a bad trade.
+  // 5. Reward:risk floor — a good idea at a bad price is a bad trade.
   if (barriers && direction !== 0) {
     if (barriers.riskRewardRatio < 1.0) {
       vetoes.push({

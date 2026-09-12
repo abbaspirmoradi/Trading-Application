@@ -56,7 +56,7 @@ test('Veto: Stage 4 blocks a long no matter how bullish everything else is', () 
   const results = [
     agent('Weinstein_Stage_Agent', 'TECHNICAL', { stage: 4 }, -90),
     agent('Chart_Pattern_Agent', 'TECHNICAL', {}, 95),
-    agent('CAN_SLIM_Agent', 'FUNDAMENTAL', {}, 95),
+    agent('Relative_Strength_Agent', 'TECHNICAL', {}, 95),
   ];
   const v = evaluateVetoes(results, 1, OK_BARRIERS);
   assert.ok(v.blocked);
@@ -163,7 +163,7 @@ test('Barriers: absurdly distant structure falls back to the volatility stop', (
 test('Quorum: fewer than three active agents produces no decision', async () => {
   const ctx = await buildMarketContext('AAPL');
   const d = await runAnalysis({
-    ticker: 'AAPL', activeAgentIds: ['CAN_SLIM_Agent'], marketContext: ctx,
+    ticker: 'AAPL', activeAgentIds: ['Weinstein_Stage_Agent'], marketContext: ctx,
     portfolio: { equity: 100000, cash: 100000, positions: [] },
   });
   assert.equal(d.finalAction, 'HOLD');
@@ -188,7 +188,7 @@ test('Orchestrator: every agent completes on a full run and risk never votes', a
     ticker: 'NVDA', activeAgentIds: AGENT_IDS, marketContext: ctx,
     portfolio: { equity: 250000, cash: 250000, positions: [] },
   });
-  assert.equal(d.agentBreakdown.length, 11);
+  assert.equal(d.agentBreakdown.length, 8);
   assert.equal(d.agentBreakdown.filter((a) => a.status === 'ERROR').length, 0);
   const risk = d.consensus.contributions.find((c) => c.agentId === 'Portfolio_Risk_Agent');
   assert.equal(risk.directionalVote, false);
@@ -408,14 +408,15 @@ test('Caveats: an over-firing pattern is flagged as uninformative', async () => 
 test('Caveats: agents reading generated data are named on the composite', async () => {
   const { buildCaveats } = await import('../engine/Caveats.js');
   const agentResults = [
-    { agentId: 'Options_Sentiment_Agent', agentName: 'Options Sentiment & Gamma', status: 'COMPLETE', cluster: 'SENTIMENT', payload: {} },
+    { agentId: 'Intermarket_Macro_Agent', agentName: 'Intermarket & Macro Regime', status: 'COMPLETE', cluster: 'MACRO', payload: {} },
     { agentId: 'Weinstein_Stage_Agent', agentName: 'Weinstein Stage', status: 'COMPLETE', cluster: 'TECHNICAL', payload: {} },
   ];
-  const caveats = buildCaveats({ meta: null, consensus: {}, agentResults, dataSources: { options: 'MODELLED', macro: 'LIVE' }, direction: 1 });
+  // Under the synthetic provider the macro feed is generated; the caveat must name it.
+  const caveats = buildCaveats({ meta: null, consensus: {}, agentResults, dataSources: { macro: 'MODELLED' }, direction: 1 });
   const c = caveats.find((x) => x.code === 'MODELLED_INPUTS');
   assert.ok(c);
   assert.match(c.title, /1 contributing agent/);
-  assert.match(c.detail, /Options Sentiment/);
+  assert.match(c.detail, /Intermarket/);
   assert.doesNotMatch(c.detail, /Weinstein/);
 });
 

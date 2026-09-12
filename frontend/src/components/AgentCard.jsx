@@ -4,11 +4,10 @@ import { clusterMeta } from './AgentSelector.jsx';
 
 // Which feed each agent depends on, for provenance labelling. Agents absent
 // from this map run purely on price/volume and inherit that feed's provenance.
+// Under a live provider every feed is observed; the badge only appears when
+// the app is running on the synthetic provider.
 const AGENT_INPUT_FEED = {
   Intermarket_Macro_Agent: { feed: 'macro', label: 'macro data' },
-  Geopolitical_News_Agent: { feed: 'news', label: 'news flow' },
-  Options_Sentiment_Agent: { feed: 'options', label: 'options chain' },
-  CAN_SLIM_Agent: { feed: 'fundamentals', label: 'fundamentals', partial: true },
 };
 
 const SIGNAL_STYLE = {

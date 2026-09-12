@@ -1,8 +1,9 @@
 # Multi-Agent Trading Terminal
 
-A full-stack MERN application that analyses NASDAQ equities through eleven independent
-analytical agents, reviews your actual holdings, and screens the market daily for
-candidates — producing risk-bounded execution contracts rather than opinions.
+A full-stack MERN application that analyses NASDAQ equities through eight independent
+analytical agents — every one running on observed market data — reviews your actual
+holdings, and screens the market daily for candidates, producing risk-bounded execution
+contracts rather than opinions.
 
 The system is opinionated about one thing above all: **risk rules cannot be outvoted.**
 No amount of bullish consensus buys a Stage 4 downtrend, and no conviction level exceeds
@@ -15,7 +16,7 @@ the 5% single-idea ceiling.
 - [Quick start](#quick-start)
 - [UI guide — every screen explained](#ui-guide--every-screen-explained)
 - [Data provenance](#data-provenance)
-- [The eleven agents](#the-eleven-agents)
+- [The eight agents](#the-eight-agents)
 - [Decision pipeline](#decision-pipeline)
 - [Portfolio Advisor](#portfolio-advisor)
 - [Daily Picks](#daily-picks)
@@ -49,7 +50,7 @@ on screen as fact.
 
 ```bash
 npm test        # 39 unit tests — engine maths, veto rules, barriers, advisor, screener, macro, caveats
-npm run smoke   # 29 end-to-end API tests (backend must be running)
+npm run smoke   # 30 end-to-end API tests (backend must be running)
 ```
 
 ---
@@ -82,22 +83,22 @@ which is exactly what the Intermarket agent reads.
 
 Two badges matter here:
 
-- **`PRICES LIVE`** (green) or **`SIMULATED DATA`** (amber) — whether prices are real.
-- **`modelled`** on the macro row — those macro values are generated, not observed.
+- **`PRICES LIVE`** (green) or **`SIMULATED DATA`** (amber) — whether the data is real.
+- **`live`** / **`modelled`** on the macro row — the macro feed's own provenance.
 - **`live` / `disconnected`** — WebSocket health. Note this reports *connection* health,
   not price movement: the feed is daily closes, so the number itself won't tick intraday.
 
 ### Agent Control Panel (all tabs)
 
-The eleven agents as individually toggleable cards.
+The eight agents as individually toggleable cards.
 
 - **Select All / Reset / Clear All** — bulk controls.
-- **Cluster chips** (Fundamental, Technical, Quant, Macro, Sentiment, Risk, Execution) —
-  toggle a whole cluster; each shows `on/total`.
-- **`X of 11 Agents Active`** — green at quorum, amber below three, red at zero.
+- **Cluster chips** (Technical, Quant, Macro, Risk, Execution) — toggle a whole cluster;
+  each shows `on/total`.
+- **`X of 8 Agents Active`** — green at quorum, amber below three, red at zero.
 - **Per-card status** — `READY`, `COMPUTING`, `COMPLETE`, `ERROR`, `INACTIVE`.
-- **`MODELLED` / `PARTLY MODELLED` badges** — that agent's inputs are generated rather
-  than observed. Expanding the card explains which feed and why it matters.
+- **`MODELLED` badge** — appears only under the synthetic provider, marking an agent whose
+  inputs are generated. Under live data no agent carries it.
 
 Your selection persists across reloads: an agent configuration is a deliberate choice.
 
@@ -205,26 +206,22 @@ If nothing qualifies, it says so plainly. An empty list is a real answer.
 
 ## Data provenance
 
-**Only price and volume can be real.** Everything else is generated locally, on every
-setting. The UI states this rather than hiding it.
+Under the live provider, **every input is observed market data.** Three agents that
+depended on fundamentals, options chains and news feeds were removed rather than left
+running on generated inputs — a coherent argument from simulated premises is worse than no
+argument at all, and no honest free source for those feeds exists.
 
 | Feed | With `yahoo` | With `synthetic` |
 |------|--------------|------------------|
-| Price / volume / benchmark | **Real** — daily bars, last completed session | Generated |
+| Price / volume / benchmark | **Real** — daily bars, up to 20 years | Generated |
 | Macro — VIX, VXN, 10Y, 3m bill, DXY, oil, gold | **Real** — live from Yahoo | Generated |
 | Market breadth | **Real** — derived from the screening universe | Generated |
 | Credit stress | **Real proxy** — 20-day HYG vs LQD | Generated |
-| Fundamentals (EPS, float, sponsorship) | Generated | Generated |
-| Options chain (put/call, IV, gamma) | Generated | Generated |
-| News headlines | Generated | Generated |
 
-Under `yahoo`:
-
-- **8 agents run on real data** — Weinstein Stage, Chart Pattern, Volume/Order Flow,
-  Relative Strength, Fractional Quant, Intermarket Macro, Portfolio Risk, Triple Barrier.
-- **2 run on invented inputs** — Geopolitical News and Options Gamma. Their logic is
-  sound; their premises are simulated. Both carry a `MODELLED` badge in the UI.
-- **1 is mixed** — CAN SLIM: L/N/M use real price, C/A/S/I use generated fundamentals.
+Provenance is bound to each cached fetch, not to the symbol, so a failed request for one
+window size can never relabel a valid, still-cached fetch for another. A `PRICES LIVE` /
+`SIMULATED DATA` badge in the Market Overview header states which mode is active, and any
+agent reading a generated feed carries a `MODELLED` tag — under `yahoo`, none do.
 
 ### Two honest labels in the macro feed
 
@@ -235,17 +232,11 @@ The field names encode their own caveats rather than overstating precision:
   well-established recession indicator in its own right.
 - **`creditStressProxy`, not an OAS.** The actual high-yield option-adjusted spread is a
   licensed series. This measures the same phenomenon — high yield underperforming
-  investment grade — as 20-day relative performance of HYG against LQD, in percentage
-  points, where a larger positive number means widening stress.
+  investment grade — as 20-day relative performance of HYG against LQD.
 
-Breadth is computed across 30 names of the screening universe (percent above their own
-50-day average, advancers vs decliners, net new 52-week highs) rather than taken from an
-index provider — which makes it the real breadth of the names this system actually trades.
-The macro snapshot is cached for 10 minutes.
-
-Two further limits: Yahoo returns **daily bars from the last completed session**, so
-nothing here is intraday or real-time. And it is an unofficial endpoint — no SLA, rate
-limits, no commercial licence. Production needs a paid feed.
+Two further limits: Yahoo returns **daily bars from the last completed session**, so nothing
+here is intraday or real-time. And it is an unofficial endpoint — no SLA, rate limits, no
+commercial licence. Production needs a paid feed.
 
 When live data is requested and a fetch fails, the request **errors with HTTP 502** rather
 than substituting invented prices. `ALLOW_SYNTHETIC_FALLBACK=true` trades that strictness
@@ -256,7 +247,7 @@ all 39 unit tests hermetic, offline and deterministic.
 
 ---
 
-## The eleven agents
+## The eight agents
 
 Every agent implements one contract — `analyze(ctx)` returning
 `{ score: -100..100, confidence: 0..1, signal, reasoning[], metrics{}, payload{} }` — and
@@ -265,17 +256,19 @@ rather than aborting the run.
 
 | # | Agent | Cluster | What it computes |
 |---|-------|---------|------------------|
-| 1 | **CAN SLIM Growth** | Fundamental | All seven O'Neil letters graded separately: quarterly EPS vs the 25% floor, 3-year growth, catalyst + proximity to 52-week highs, float, 6-month relative performance, sponsorship change, market direction from the benchmark's 200-day MA |
-| 2 | **Weinstein Stage** | Technical | 30-week MA on weekly bars, its slope in % per week, price position; prior trend separates a base (Stage 1) from a top (Stage 3). Source of the Stage 4 veto |
-| 3 | **Chart Pattern** | Technical | Swing-pivot skeleton, then cup-with-handle, double bottom, head & shoulders (both polarities) and flat base — each with breakout level, measured-move target and invalidation |
-| 4 | **Volume & Order Flow** | Technical | Most recent 50-day breakout and its volume vs the 20-day average (1.5× required), up/down volume ratio, pullback dry-up, tick-rule order-flow imbalance |
-| 5 | **Relative Strength** | Technical | Mansfield RS vs QQQ, IBD-style 1–99 rating via a normal CDF on weighted relative performance, RS-line new highs, MACD/RSI state, bearish divergence |
-| 6 | **Fractional Differentiation** | Quant | Sweeps d from 0.05 to 1.0 and picks the *minimum* order passing an ADF test — maximum memory subject to stationarity. Plus dollar bars and an aggressor metric |
-| 7 | **Intermarket & Macro** | Macro | Live yields, DXY, VIX/VXN, 3m/10y curve, credit-stress proxy and universe breadth into a risk-on/off composite and a tech-multiple headwind score; runs the threat radar |
-| 8 | **Geopolitical & News** | Sentiment | Recency-weighted sentiment (36-hour half-life) weighted for export controls, tariffs, supply chain and regulatory channels |
-| 9 | **Options & Gamma** | Sentiment | Dealer gamma regime around the flip level, put/call as a contrarian signal at extremes, IV percentile and skew, call wall and put floor |
-| 10 | **Portfolio Risk** | Risk | N×N correlation against open positions, portfolio heat, per-trade dollar ceiling, position-cap headroom. **Gatekeeper** |
-| 11 | **Triple Barrier & Exit** | Execution | Volatility-adjusted target, structural stop (reaction low / rising 30-week MA) preferred over ATR, vertical time barrier. **Gatekeeper** |
+| 1 | **Weinstein Stage** | Technical | 30-week MA on weekly bars, its slope in % per week, price position; prior trend separates a base (Stage 1) from a top (Stage 3). Source of the Stage 4 veto |
+| 2 | **Chart Pattern** | Technical | Swing-pivot skeleton, then cup-with-handle, double bottom, head & shoulders (both polarities) and flat base — each with breakout level, measured-move target and invalidation |
+| 3 | **Volume & Order Flow** | Technical | Most recent 50-day breakout and its volume vs the 20-day average (1.5× required), up/down volume ratio, pullback dry-up, tick-rule order-flow imbalance |
+| 4 | **Relative Strength** | Technical | Mansfield RS vs QQQ, IBD-style 1–99 rating via a normal CDF on weighted relative performance, RS-line new highs, MACD/RSI state, bearish divergence |
+| 5 | **Fractional Differentiation** | Quant | Sweeps d from 0.05 to 1.0 and picks the *minimum* order passing an ADF test — maximum memory subject to stationarity. Plus dollar bars and an aggressor metric |
+| 6 | **Intermarket & Macro** | Macro | Live yields, DXY, VIX/VXN, 3m/10y curve, credit-stress proxy and universe breadth into a risk-on/off composite and a tech-multiple headwind score; runs the threat radar |
+| 7 | **Portfolio Risk** | Risk | N×N correlation against open positions, portfolio heat, per-trade dollar ceiling, position-cap headroom. **Gatekeeper** |
+| 8 | **Triple Barrier & Exit** | Execution | Volatility-adjusted target, structural stop (reaction low / rising 30-week MA) preferred over ATR, vertical time barrier. **Gatekeeper** |
+
+**Removed:** CAN SLIM Growth (needed fundamentals), Geopolitical & News (needed a news
+feed), Options & Gamma (needed an options chain). Their scaffolding is gone rather than
+disabled. Restoring any of them means writing the class against a real data provider and
+adding one line to `agents/index.js`.
 
 ### Voters vs gatekeepers
 
@@ -321,7 +314,6 @@ filled at. Three modes:
 | `STAGE_3_DISTRIBUTION` | ×0.35 | Topping pattern — no new longs |
 | `VOLUME_UNCONFIRMED` | ×0.5 | Breakout below 1.5× average volume |
 | `INTERMARKET_THREAT_RADAR` | ×0.5 | Yields spiking with VIX > 25 |
-| `GEOPOLITICAL_EXTREME` | ×0.5 | Extreme supply-chain / conflict risk |
 | `REWARD_RISK_SUBOPTIMAL` | ×0.6 | Reward:risk below the 1.8:1 target |
 
 Downgrade multipliers compound; any BLOCK zeroes the size.
@@ -449,10 +441,10 @@ measurement is visible as stale.
 caps, stop distances — these are measurements of numbers you supplied, covered by 39
 tests. Rely on them.
 
-**The composite score overstates its own breadth.** The nine voting agents behave like
-**3.8 independent opinions**; the trend-following cluster correlates at r = 0.74–0.86, so
-"nine agents agree" is mostly one view restated. The decision card shows
-`9 agents ≈ 3.8 independent` under the composite.
+**The composite score overstates its own breadth.** The six voting agents behave like
+**3.1 independent opinions**; the trend-following cluster correlates at r = 0.74–0.86, so
+"six agents agree" is mostly one view restated. The decision card shows
+`6 agents ≈ 3.1 independent` under the composite.
 
 **The chart-pattern detector over-fires.** "Double Bottom" is detected in ~70% of the
 universe. A pattern found in most charts carries almost no information; the card says so
@@ -474,7 +466,7 @@ with a buy-and-hold benchmark and a bootstrap that resamples whole tickers:
 median CAGR           10.6%        15.4%
 median max drawdown   55.7%        67.7%     shallower on 43/52 names
 per-trade excess      +1.4%   95% CI [0.3%, 2.5%]   — real, but small
-beat buy-and-hold on  6 / 52 names
+beat buy-and-hold on  7 / 52 names
 ```
 
 Risk-adjusted (return/vol, Calmar) it is a coin flip against simply holding. Whether
@@ -634,7 +626,7 @@ Kafka means an in-process EventEmitter, no network means synthetic data.
 ```bash
 npm test        # 39 unit tests, hermetic and offline (~250ms)
 npm run calibrate  # measures the system against itself; feeds the on-screen caveats
-npm run smoke   # 29 API tests against a running server
+npm run smoke   # 30 API tests against a running server
 ```
 
 Coverage includes the Kelly identities, every veto rule, barrier geometry (both
@@ -647,10 +639,11 @@ snapshots, and the invariant that a profit target always sits beyond its entry.
 
 ## Scope notes
 
-- **Eleven agents are implemented.** The wider taxonomy (Financial Health, Earnings
-  Quality, Statistical Arbitrage, Rule Validator, Market Regime, Market Tone, Social NLP,
-  Information Bars, Execution Timing) is not built. The registry is one list in
-  `agents/index.js` — adding one means writing the class and adding a line.
+- **Eight agents are implemented**, all on observed data. Three from the original eleven
+  were removed because their inputs could not be sourced honestly; the wider taxonomy
+  (Financial Health, Earnings Quality, Statistical Arbitrage, Rule Validator, Market Regime,
+  Market Tone, Social NLP, Information Bars, Execution Timing) is not built. The registry
+  is one list in `agents/index.js` — adding one means writing the class and adding a line.
 - **Camunda**: a Camunda-compatible BPMN 2.0 definition ships in
   `backend/workflow/manager-decision.bpmn` (external-task topics on every service task,
   validated well-formed) mirrored by `decisionPipeline.js`. Execution defaults to the
@@ -661,11 +654,9 @@ snapshots, and the invariant that a profit target always sits beyond its entry.
   where a retrieval pipeline over live news and EDGAR filings attaches. No LLM calls are
   made; every agent is deterministic and unit-testable, which is why the suite runs in
   ~100ms.
-- **Fundamentals, options and news are still modelled**, not fetched. Those three require
-  paid or keyed entitlements (a fundamentals API, an options chain provider, a news feed).
-  Macro was moved to live data because it could be assembled from free, unauthenticated
-  sources; these cannot. Swap the generators in `data/marketDataService.js` for real
-  providers without touching an agent.
+- **No fundamentals, options or news.** Those feeds need paid or keyed entitlements, and
+  the agents that would have consumed them were removed rather than fed generated data.
+  Macro stayed because it could be assembled from free, unauthenticated sources.
 
 **This is analytical software, not investment advice.** It places no orders and connects to
 no broker. Backtested and synthetic results are not predictive of live performance.

@@ -165,9 +165,18 @@ export async function metaLabel(ctx, side) {
   const hit = modelCache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value;
 
-  // Train on everything the provider has, not the analysis window.
+  // Train on everything the provider has, not the analysis window. If the
+  // long fetch fails (rate limit, transient error) fall back to the analysis
+  // window, but say so in the result rather than pretending to 20 years.
   let bars;
-  try { bars = await getFullHistory(ctx.ticker); } catch { bars = ctx.bars; }
+  let historyNote = null;
+  try {
+    bars = await getFullHistory(ctx.ticker);
+  } catch (err) {
+    bars = ctx.bars;
+    historyNote = `Full history unavailable (${err.message}); trained on the ${ctx.bars.length}-bar analysis window instead.`;
+    console.warn(`[meta] ${ctx.ticker}: ${historyNote}`);
+  }
   const benchCloses = closes(ctx.benchmarkBars);
   const px = closes(bars);
   const vol = bars.map((b) => b.volume);
@@ -307,6 +316,7 @@ export async function metaLabel(ctx, side) {
     outOfSample,
     horizonDays: horizon,
     historyYears: Number((bars.length / 252).toFixed(1)),
+    historyNote,
     featureImportance,
   };
   modelCache.set(key, { at: Date.now(), value });

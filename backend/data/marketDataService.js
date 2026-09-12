@@ -7,9 +7,7 @@
 // modelled locally — those feeds require paid entitlements, and the agents care
 // about the shape of the inputs, not their provenance.
 
-import {
-  generateBars, generateFundamentals, generateOptionsChainSummary, generateNews,
-} from './syntheticMarket.js';
+import { generateBars } from './syntheticMarket.js';
 import { BENCHMARK, BARRIERS, HISTORY_MAX_DAYS } from '../config/constants.js';
 
 const CACHE_TTL_MS = 60_000;
@@ -23,12 +21,18 @@ function cached(key, producer) {
   return value;
 }
 
-async function cachedAsync(key, producer) {
+/**
+ * Like `cached`, but the producer returns `{ value, meta }` and the whole entry
+ * is returned — so a caller can read the metadata of whatever it actually
+ * received, whether fresh or from cache.
+ */
+async function cachedEntry(key, producer) {
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value;
-  const value = await producer();
-  cache.set(key, { at: Date.now(), value });
-  return value;
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit;
+  const { value, meta } = await producer();
+  const entry = { at: Date.now(), value, meta };
+  cache.set(key, entry);
+  return entry;
 }
 
 /** Longest daily history available, for backtesting and model fitting. */
@@ -81,8 +85,11 @@ async function fetchYahooBars(ticker, days) {
   return bars.slice(-days);
 }
 
-// Per-symbol record of where the last set of bars actually came from, so a
-// degraded fetch can never masquerade as live data downstream.
+// Per-symbol record of where the bars most recently RETURNED for that symbol
+// came from. Written from the cache entry on every call — hit or miss — so a
+// failed fetch for one window size can never poison the label of a valid,
+// still-cached fetch for another. (It did, once: a rate-limited 20-year fetch
+// for the meta-model marked NVDA "modelled" while its 5-year bars were real.)
 const provenance = new Map();
 
 export function getProvenance(symbol) {
@@ -102,28 +109,30 @@ function fallbackAllowed() {
 /** Daily OHLCV bars, newest last. */
 export async function getBars(ticker, days = BARRIERS.analysisDays) {
   const symbol = ticker.toUpperCase();
-  return cachedAsync(`bars:${symbol}:${days}:${provider()}`, async () => {
+  const entry = await cachedEntry(`bars:${symbol}:${days}:${provider()}`, async () => {
     if (provider() === 'yahoo') {
       try {
         const bars = await fetchYahooBars(symbol, days);
-        provenance.set(symbol, { source: 'yahoo', live: true, asOf: bars.at(-1).date, fetchedAt: new Date().toISOString() });
-        return bars;
+        return { value: bars, meta: { source: 'yahoo', live: true, asOf: bars.at(-1).date, fetchedAt: new Date().toISOString() } };
       } catch (err) {
         if (!fallbackAllowed()) {
-          provenance.set(symbol, { source: 'none', live: false, error: err.message });
+          // Logged, because a swallowed failure upstream would otherwise leave
+          // no trace of why a request degraded.
+          console.warn(`[data] yahoo fetch failed for ${symbol} (${days} bars): ${err.message}`);
           throw Object.assign(
             new Error(`Live market data unavailable for ${symbol} (${err.message}). Check the symbol, or set ALLOW_SYNTHETIC_FALLBACK=true to allow generated data.`),
             { status: 502 },
           );
         }
         console.warn(`[data] yahoo failed for ${symbol} (${err.message}) — DEGRADED to synthetic series`);
-        provenance.set(symbol, { source: 'synthetic', live: false, degraded: true, error: err.message });
-        return generateBars(symbol, days);
+        return { value: generateBars(symbol, days), meta: { source: 'synthetic', live: false, degraded: true, error: err.message } };
       }
     }
-    provenance.set(symbol, { source: 'synthetic', live: false, degraded: false });
-    return generateBars(symbol, days);
+    return { value: generateBars(symbol, days), meta: { source: 'synthetic', live: false, degraded: false } };
   });
+
+  provenance.set(symbol, entry.meta);
+  return entry.value;
 }
 
 export async function getQuote(ticker) {
@@ -142,18 +151,6 @@ export async function getQuote(ticker) {
 
 export async function getBenchmarkBars(days = BARRIERS.analysisDays) {
   return getBars(BENCHMARK, days);
-}
-
-export function getFundamentals(ticker, bars) {
-  return cached(`fund:${ticker}`, () => generateFundamentals(ticker.toUpperCase(), bars));
-}
-
-export function getOptions(ticker, price, bars) {
-  return cached(`opt:${ticker}:${Math.round(price)}`, () => generateOptionsChainSummary(ticker.toUpperCase(), price, bars));
-}
-
-export function getNews(ticker) {
-  return cached(`news:${ticker}`, () => generateNews(ticker.toUpperCase()));
 }
 
 /**
@@ -186,21 +183,14 @@ export async function buildMarketContext(ticker, { timeframe = '1D', days = BARR
     benchmarkBars,
     price,
     asOf: bars.at(-1).date,
-    fundamentals: getFundamentals(symbol, bars),
-    options: getOptions(symbol, price, bars),
-    news: getNews(symbol),
     macro,
     provider: provider(),
-    // Explicit provenance per feed. Price/volume can be live; the remaining
-    // feeds are modelled locally regardless of provider, and saying so here is
-    // what stops a modelled gamma level being read as an observed one.
+    // Explicit provenance per feed. Under a live provider every feed here is
+    // observed; under `synthetic` every feed is generated, and the UI says so.
     dataSources: {
       priceVolume: priceSource?.live ? 'LIVE' : 'MODELLED',
       priceVolumeDetail: priceSource,
       benchmark: benchSource?.live ? 'LIVE' : 'MODELLED',
-      fundamentals: 'MODELLED',
-      options: 'MODELLED',
-      news: 'MODELLED',
       macro: macro.source === 'LIVE' ? 'LIVE' : 'MODELLED',
       macroNote: macro.sourceNote,
       degraded: Boolean(priceSource?.degraded || benchSource?.degraded),
