@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   ShieldAlert, TrendingUp, TrendingDown, Minus, Target, Ban,
-  Crosshair, Layers, Gauge,
+  Crosshair, Layers, Gauge, AlertTriangle, Info, ScanSearch,
 } from 'lucide-react';
 
 const ACTION_STYLES = {
@@ -51,9 +51,23 @@ export default function ExecutiveDecisionCard({ decision }) {
         </div>
 
         <div className="flex gap-5">
-          <Metric label="Composite" value={`${decision.compositeScore > 0 ? '+' : ''}${decision.compositeScore}`} tone={decision.compositeScore > 0 ? 'pos' : decision.compositeScore < 0 ? 'neg' : 'flat'} />
+          <Metric
+            label="Composite"
+            value={`${decision.compositeScore > 0 ? '+' : ''}${decision.compositeScore}`}
+            tone={decision.compositeScore > 0 ? 'pos' : decision.compositeScore < 0 ? 'neg' : 'flat'}
+            caveat={worstCaveat(decision.caveats, 'composite')}
+            sub={decision.consensus?.effectiveOpinions != null
+              ? `${decision.consensus.votingAgentCount} agents ≈ ${decision.consensus.effectiveOpinions} independent`
+              : null}
+          />
           <Metric label="Confidence" value={`${(decision.confidence * 100).toFixed(0)}%`} />
-          <Metric label="P(profit)" value={`${(decision.probabilityOfProfit * 100).toFixed(1)}%`} tone={decision.probabilityOfProfit > 0.55 ? 'pos' : decision.probabilityOfProfit < 0.45 ? 'neg' : 'flat'} />
+          <Metric
+            label="P(profit)"
+            value={`${(decision.probabilityOfProfit * 100).toFixed(1)}%`}
+            tone={decision.probabilityOfProfit > 0.55 ? 'pos' : decision.probabilityOfProfit < 0.45 ? 'neg' : 'flat'}
+            caveat={worstCaveat(decision.caveats, 'probability')}
+            sub={decision.metaLabel?.validation ? validationLabel(decision.metaLabel.validation.verdict) : null}
+          />
         </div>
       </div>
 
@@ -75,6 +89,9 @@ export default function ExecutiveDecisionCard({ decision }) {
           neutralColor
         />
       </div>
+
+      {/* Measured reasons to doubt the numbers above */}
+      {decision.caveats?.length > 0 && <CaveatPanel caveats={decision.caveats} />}
 
       {/* Vetoes */}
       {decision.vetoesTriggered?.length > 0 && (
@@ -185,16 +202,41 @@ export default function ExecutiveDecisionCard({ decision }) {
               <span className="text-[11px] font-semibold text-slate-300">Meta-Model ({decision.metaLabel.method})</span>
             </div>
             <div className="flex flex-wrap gap-x-6 gap-y-1.5 text-[11px] text-slate-400">
-              <span>Raw p: <span className="text-slate-200 tabular-nums">{decision.metaLabel.probability}</span></span>
-              <span>Training labels: <span className="text-slate-200 tabular-nums">{decision.metaLabel.trainingSamples}</span></span>
-              <span>Base rate: <span className="text-slate-200 tabular-nums">{decision.metaLabel.baseRate}</span></span>
-              {decision.metaLabel.inSampleAccuracy != null && (
-                <span>Accuracy: <span className="text-slate-200 tabular-nums">{(decision.metaLabel.inSampleAccuracy * 100).toFixed(1)}%</span></span>
+              <span>Shown p: <span className="text-slate-200 tabular-nums">{decision.metaLabel.probability}</span></span>
+              {decision.metaLabel.fittedProbability != null && decision.metaLabel.fittedProbability !== decision.metaLabel.probability && (
+                <span>Fitted p: <span className="text-slate-500 tabular-nums line-through">{decision.metaLabel.fittedProbability}</span></span>
               )}
-              {decision.metaLabel.brierScore != null && (
-                <span>Brier: <span className="text-slate-200 tabular-nums">{decision.metaLabel.brierScore}</span></span>
+              <span>Base rate: <span className="text-slate-200 tabular-nums">{decision.metaLabel.baseRate}</span></span>
+              <span>Labels: <span className="text-slate-200 tabular-nums">{decision.metaLabel.trainingSamples?.toLocaleString('en-US')}</span></span>
+              {decision.metaLabel.effectiveSamples != null && (
+                <span>Effective: <span className="text-amber-300 tabular-nums font-semibold">~{Math.round(decision.metaLabel.effectiveSamples)}</span></span>
+              )}
+              {decision.metaLabel.historyYears != null && (
+                <span>History: <span className="text-slate-200 tabular-nums">{decision.metaLabel.historyYears}y</span></span>
               )}
             </div>
+            {decision.metaLabel.outOfSample && (
+              <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1.5 text-[11px] text-slate-400 border-t border-slate-800 pt-2">
+                <span className="text-slate-500">Out-of-sample:</span>
+                <span>accuracy <span className="text-slate-200 tabular-nums">{(decision.metaLabel.outOfSample.accuracy * 100).toFixed(1)}%</span></span>
+                <span>baseline <span className="text-slate-200 tabular-nums">{(decision.metaLabel.outOfSample.majorityBaseline * 100).toFixed(1)}%</span></span>
+                <span>
+                  lift{' '}
+                  <span className={`tabular-nums font-semibold ${decision.metaLabel.outOfSample.liftOverBaseline > 0.02 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {decision.metaLabel.outOfSample.liftOverBaseline > 0 ? '+' : ''}{(decision.metaLabel.outOfSample.liftOverBaseline * 100).toFixed(1)} pts
+                  </span>
+                </span>
+                <span>on <span className="text-slate-200 tabular-nums">{decision.metaLabel.outOfSample.testSamples}</span> unseen labels</span>
+                {decision.metaLabel.inSampleAccuracy != null && (
+                  <span className="text-slate-600">(in-sample {(decision.metaLabel.inSampleAccuracy * 100).toFixed(1)}%)</span>
+                )}
+              </div>
+            )}
+            {decision.metaLabel.validation && (
+              <p className={`mt-2 text-[10.5px] leading-snug ${decision.metaLabel.validation.verdict === 'VALIDATED' ? 'text-emerald-400/90' : 'text-amber-400/90'}`}>
+                {decision.metaLabel.validation.summary}
+              </p>
+            )}
             {decision.metaLabel.featureImportance?.length > 0 && (
               <div className="mt-2.5 flex flex-wrap gap-1.5">
                 {decision.metaLabel.featureImportance.slice(0, 5).map((f) => (
@@ -227,12 +269,86 @@ function SectionTitle({ icon: Icon, children }) {
   );
 }
 
-function Metric({ label, value, tone = 'flat' }) {
+function worstCaveat(caveats, appliesTo) {
+  const rank = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+  return (caveats || [])
+    .filter((c) => c.appliesTo === appliesTo)
+    .sort((a, b) => rank[a.severity] - rank[b.severity])[0] || null;
+}
+
+function validationLabel(verdict) {
+  return {
+    VALIDATED: 'validated out-of-sample',
+    WEAK: 'weak out-of-sample skill',
+    NO_SKILL: 'no out-of-sample skill — base rate shown',
+    UNVALIDATED: 'unvalidated',
+  }[verdict] || null;
+}
+
+const CAVEAT_STYLE = {
+  HIGH: { text: 'text-rose-300', bg: 'bg-rose-950/30 border-rose-900/50', Icon: AlertTriangle },
+  MEDIUM: { text: 'text-amber-300', bg: 'bg-amber-950/25 border-amber-900/50', Icon: AlertTriangle },
+  LOW: { text: 'text-slate-300', bg: 'bg-slate-800/40 border-slate-700/60', Icon: Info },
+};
+
+const APPLIES_LABEL = { probability: 'P(profit)', composite: 'Composite', pattern: 'Pattern', system: 'Strategy' };
+
+/**
+ * Every measured reason to doubt the numbers above, shown before the order
+ * details so they are read in that order. Derived from the decision itself and
+ * from `npm run calibrate` — never hand-written.
+ */
+function CaveatPanel({ caveats }) {
+  const rank = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+  const sorted = [...caveats].sort((a, b) => rank[a.severity] - rank[b.severity]);
+  const high = sorted.filter((c) => c.severity === 'HIGH').length;
+  return (
+    <div className="px-5 pb-4">
+      <div className="rounded-lg border border-slate-800 bg-slate-950/50">
+        <div className="px-3 py-2 flex items-center gap-2 border-b border-slate-800">
+          <ScanSearch className="w-3.5 h-3.5 text-amber-400" />
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-300">Before you act on this</span>
+          <span className="text-[10px] text-slate-500">{sorted.length} measured caveat{sorted.length === 1 ? '' : 's'}{high ? ` · ${high} serious` : ''}</span>
+        </div>
+        <div className="divide-y divide-slate-800/70">
+          {sorted.map((c) => {
+            const st = CAVEAT_STYLE[c.severity];
+            const { Icon } = st;
+            return (
+              <div key={c.code} className="px-3 py-2 flex items-start gap-2.5">
+                <Icon className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${st.text}`} />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-[11.5px] font-semibold ${st.text}`}>{c.title}</span>
+                    <span className="text-[9px] uppercase tracking-wider text-slate-600">{APPLIES_LABEL[c.appliesTo] || c.appliesTo}</span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-400 leading-relaxed mt-0.5">{c.detail}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Metric({ label, value, tone = 'flat', caveat = null, sub = null }) {
   const color = tone === 'pos' ? 'text-emerald-400' : tone === 'neg' ? 'text-rose-400' : 'text-slate-200';
+  const warn = caveat && caveat.severity !== 'LOW';
   return (
     <div className="text-right">
-      <div className="stat-label">{label}</div>
+      <div className="stat-label flex items-center justify-end gap-1">
+        {warn && (
+          <AlertTriangle
+            className={`w-3 h-3 ${caveat.severity === 'HIGH' ? 'text-rose-400' : 'text-amber-400'}`}
+            title={caveat.title}
+          />
+        )}
+        {label}
+      </div>
       <div className={`text-xl font-bold tabular-nums ${color}`}>{value}</div>
+      {sub && <div className="text-[9.5px] text-slate-500 leading-tight max-w-[150px]">{sub}</div>}
     </div>
   );
 }

@@ -18,6 +18,7 @@ import { computeKellySize } from './KellyEngine.js';
 import { metaLabel } from './MetaLabeler.js';
 import { clamp } from '../lib/stats.js';
 import { publish } from '../bus/eventBus.js';
+import { buildCaveats, effectiveOpinions } from './Caveats.js';
 
 const DIRECTION_THRESHOLD = 12; // composite score needed to commit to a side
 
@@ -82,7 +83,7 @@ export async function runAnalysis({
   const vetoResult = evaluateVetoes(usable, direction, barriers);
 
   /* ---------------- Stage 4: meta-labelling and sizing ---------------- */
-  const meta = direction !== 0 ? metaLabel(ctx, direction) : null;
+  const meta = direction !== 0 ? await metaLabel(ctx, direction) : null;
 
   // Blend the meta-model's probability with the consensus prior in log-odds
   // space. The consensus expresses conviction; the meta-model expresses
@@ -183,6 +184,8 @@ export async function runAnalysis({
     }),
     dataProvider: ctx.provider,
     dataSources: ctx.dataSources,
+    // Measured reasons to doubt each number above. See engine/Caveats.js.
+    caveats: buildCaveats({ meta, consensus, agentResults: usable, dataSources: ctx.dataSources, direction }),
     elapsedMs: Date.now() - startedAt,
     generatedAt: new Date().toISOString(),
   };
@@ -295,6 +298,9 @@ function buildConsensus(results, performanceWeights) {
     contributions,
     clusterScores,
     votingAgentCount: voters.length,
+    // How many genuinely independent views the voters represent, from the
+    // calibrated correlation matrix. null until `npm run calibrate` has run.
+    effectiveOpinions: effectiveOpinions(voters.map((r) => r.agentId)),
     gatekeeperCount: results.length - voters.length,
     bullishCount: voters.filter((r) => r.signal === 'BULLISH').length,
     bearishCount: voters.filter((r) => r.signal === 'BEARISH').length,

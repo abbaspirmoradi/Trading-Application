@@ -38,7 +38,7 @@ const humanise = (k) => k
  * reasoning trace. Collapsed by default — eleven expanded cards is noise, but
  * every number stays one click away.
  */
-export default function AgentCard({ result, contribution, dataSources }) {
+export default function AgentCard({ result, contribution, dataSources, caveats = [] }) {
   const [open, setOpen] = useState(false);
   const meta = clusterMeta(result.cluster);
   const Icon = meta.icon;
@@ -54,6 +54,9 @@ export default function AgentCard({ result, contribution, dataSources }) {
   // that has to be visible on the card, not buried in a README.
   const inputFeed = AGENT_INPUT_FEED[result.agentId];
   const modelledInput = inputFeed && dataSources && dataSources[inputFeed.feed] === 'MODELLED';
+  // The pattern detector's selectivity, measured across the universe.
+  const patternCaveat = result.agentId === 'Chart_Pattern_Agent'
+    ? caveats.find((c) => c.appliesTo === 'pattern') : null;
 
   const scoreColor = result.score > 20 ? 'text-emerald-400'
     : result.score < -20 ? 'text-rose-400' : 'text-slate-300';
@@ -198,6 +201,11 @@ export default function AgentCard({ result, contribution, dataSources }) {
             </div>
           )}
 
+          {patternCaveat && (
+            <p className={`text-[10px] leading-snug ${patternCaveat.severity === 'HIGH' ? 'text-rose-400/90' : patternCaveat.severity === 'MEDIUM' ? 'text-amber-400/80' : 'text-slate-500'}`}>
+              {patternCaveat.title}. {patternCaveat.detail}
+            </p>
+          )}
           {modelledInput && (
             <p className="text-[10px] text-amber-400/80 leading-snug">
               Inputs generated locally: this agent's {inputFeed.label} {inputFeed.partial ? 'are not fully ' : 'are not '}

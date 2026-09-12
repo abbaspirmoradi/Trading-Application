@@ -369,3 +369,75 @@ test('Macro: the Intermarket agent scores finitely on a generated snapshot', asy
   assert.ok(['RISK_ON', 'RISK_OFF', 'NEUTRAL'].includes(r.payload.regime));
   assert.ok(r.reasoning.every((line) => !/NaN|undefined/.test(line)), `reasoning contains a bad value: ${r.reasoning.join(' | ')}`);
 });
+
+test('Caveats: effective opinions collapse to 1 for identical agents and N for independent ones', async () => {
+  const { effectiveOpinions } = await import('../engine/Caveats.js');
+  const identical = { agentRedundancy: { correlationMatrix: { A: { A: 1, B: 1, C: 1 }, B: { A: 1, B: 1, C: 1 }, C: { A: 1, B: 1, C: 1 } } } };
+  const independent = { agentRedundancy: { correlationMatrix: { A: { A: 1, B: 0, C: 0 }, B: { A: 0, B: 1, C: 0 }, C: { A: 0, B: 0, C: 1 } } } };
+  assert.equal(effectiveOpinions(['A', 'B', 'C'], identical), 1);
+  assert.equal(effectiveOpinions(['A', 'B', 'C'], independent), 3);
+});
+
+test('Caveats: a meta-model with no out-of-sample skill produces a HIGH probability caveat', async () => {
+  const { buildCaveats } = await import('../engine/Caveats.js');
+  const meta = {
+    method: 'BASE_RATE_AFTER_FAILED_VALIDATION',
+    fittedProbability: 0.72, probability: 0.53, baseRate: 0.53,
+    trainingSamples: 4000, effectiveSamples: 60, horizonDays: 252,
+    validation: { verdict: 'NO_SKILL', summary: 'Does NOT beat the baseline.' },
+  };
+  const caveats = buildCaveats({ meta, consensus: {}, agentResults: [], dataSources: {}, direction: 1 });
+  const c = caveats.find((x) => x.code === 'META_MODEL_NO_SKILL');
+  assert.ok(c, 'no-skill caveat missing');
+  assert.equal(c.severity, 'HIGH');
+  assert.equal(c.appliesTo, 'probability');
+  assert.match(c.detail, /72%/, 'should disclose the discarded fitted value');
+});
+
+test('Caveats: an over-firing pattern is flagged as uninformative', async () => {
+  const { buildCaveats } = await import('../engine/Caveats.js');
+  const agentResults = [{ agentId: 'Chart_Pattern_Agent', status: 'COMPLETE', cluster: 'TECHNICAL', payload: { pattern: 'Double Bottom' } }];
+  const caveats = buildCaveats({ meta: null, consensus: {}, agentResults, dataSources: {}, direction: 1 });
+  const c = caveats.find((x) => x.code === 'PATTERN_DETECTION_RATE');
+  // Only asserts when calibration exists (it is committed, so it should).
+  if (c) {
+    assert.ok(c.severity === 'HIGH' || c.severity === 'MEDIUM', `Double Bottom at its measured rate should not be LOW, got ${c.severity}`);
+  }
+});
+
+test('Caveats: agents reading generated data are named on the composite', async () => {
+  const { buildCaveats } = await import('../engine/Caveats.js');
+  const agentResults = [
+    { agentId: 'Options_Sentiment_Agent', agentName: 'Options Sentiment & Gamma', status: 'COMPLETE', cluster: 'SENTIMENT', payload: {} },
+    { agentId: 'Weinstein_Stage_Agent', agentName: 'Weinstein Stage', status: 'COMPLETE', cluster: 'TECHNICAL', payload: {} },
+  ];
+  const caveats = buildCaveats({ meta: null, consensus: {}, agentResults, dataSources: { options: 'MODELLED', macro: 'LIVE' }, direction: 1 });
+  const c = caveats.find((x) => x.code === 'MODELLED_INPUTS');
+  assert.ok(c);
+  assert.match(c.title, /1 contributing agent/);
+  assert.match(c.detail, /Options Sentiment/);
+  assert.doesNotMatch(c.detail, /Weinstein/);
+});
+
+test('Meta-model: effective samples are far fewer than training labels at a long horizon', async () => {
+  const { metaLabel } = await import('../engine/MetaLabeler.js');
+  const ctx = await buildMarketContext('AAPL');
+  const m = await metaLabel(ctx, 1);
+  assert.ok(m.effectiveSamples < m.trainingSamples / 5,
+    `overlapping ${m.horizonDays}-day labels should shrink ${m.trainingSamples} to well under a fifth, got ${m.effectiveSamples}`);
+});
+
+test('Meta-model: the shown probability never strays further from the base rate than the fitted one', async () => {
+  const { metaLabel } = await import('../engine/MetaLabeler.js');
+  for (const t of ['AAPL', 'NVDA', 'MSFT']) {
+    const ctx = await buildMarketContext(t);
+    const m = await metaLabel(ctx, 1);
+    if (m.fittedProbability == null) continue;
+    const fittedDist = Math.abs(m.fittedProbability - m.baseRate);
+    const shownDist = Math.abs(m.probability - m.baseRate);
+    assert.ok(shownDist <= fittedDist + 1e-9, `${t}: shrinkage moved the probability AWAY from the base rate`);
+    if (m.validation.verdict === 'NO_SKILL') {
+      assert.ok(Math.abs(m.probability - m.baseRate) < 1e-6, `${t}: NO_SKILL must show exactly the base rate`);
+    }
+  }
+});

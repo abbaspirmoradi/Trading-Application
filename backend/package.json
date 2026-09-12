@@ -10,7 +10,8 @@
     "dev": "node --watch server.js",
     "seed": "node scripts/seed.js",
     "smoke": "node scripts/smoke.js",
-    "test": "node --test scripts/*.test.js"
+    "test": "node --test scripts/*.test.js",
+    "calibrate": "node scripts/calibrate.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -115,6 +115,7 @@ export default function AnalysisDashboard({ decision, ticker }) {
               result={result}
               contribution={contributionById[result.agentId]}
               dataSources={decision.dataSources}
+              caveats={decision.caveats}
             />
           ))}
         </div>

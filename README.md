@@ -20,6 +20,7 @@ the 5% single-idea ceiling.
 - [Portfolio Advisor](#portfolio-advisor)
 - [Daily Picks](#daily-picks)
 - [Backtesting & audit](#backtesting--audit)
+- [How much to trust each number](#how-much-to-trust-each-number)
 - [Accounts & security](#accounts--security)
 - [Deployment](#deployment)
 - [API reference](#api-reference)
@@ -47,7 +48,7 @@ offline. Either way, read [Data provenance](#data-provenance) before treating an
 on screen as fact.
 
 ```bash
-npm test        # 32 unit tests — engine maths, veto rules, barriers, advisor, screener, macro
+npm test        # 39 unit tests — engine maths, veto rules, barriers, advisor, screener, macro, caveats
 npm run smoke   # 29 end-to-end API tests (backend must be running)
 ```
 
@@ -251,7 +252,7 @@ than substituting invented prices. `ALLOW_SYNTHETIC_FALLBACK=true` trades that s
 for resilience, flagging the result `degraded`.
 
 The **test suite deliberately stays on synthetic data** (it never loads `.env`), keeping
-all 32 unit tests hermetic, offline and deterministic.
+all 39 unit tests hermetic, offline and deterministic.
 
 ---
 
@@ -328,19 +329,23 @@ Downgrade multipliers compound; any BLOCK zeroes the size.
 ### Meta-labelling
 
 The primary model decides **direction**; the meta-model decides **whether to take the bet
-and how big**. It is a real logistic regression fitted at request time on the ticker's own
-history, labelled by the triple-barrier method:
+and how big**. It is a logistic regression fitted at request time on the ticker's full
+history (up to 20 years), labelled by the triple-barrier method, with three corrections
+from López de Prado:
 
-- Training samples stop one horizon before the present, so every label is fully observed —
-  **no look-ahead**.
-- Seven features standardised on the training set, same transform at inference.
-- Reports training count, base rate, in-sample accuracy, Brier score and per-feature
-  contributions, so its trustworthiness is visible.
-- Degenerate cases (too few samples, single-class labels) fall back to the base rate rather
-  than pretending to a fitted model.
+- **Sample uniqueness** (Ch. 4) — each label is weighted by its average uniqueness over its
+  lifespan, and the sum of uniqueness is reported as the *effective* sample size. At a
+  252-day horizon, 4,500 labels are roughly 70 independent observations, and the UI says so.
+- **Purged holdout with embargo** (Ch. 7) — accuracy is reported on a time-ordered test set
+  separated from training by one full horizon. In-sample accuracy is shown beside it,
+  labelled as such.
+- **Skill-proportional shrinkage** — the displayed probability is pulled toward the base rate
+  in proportion to out-of-sample lift over the majority-class baseline. Under two points of
+  lift earns no trust; ten earns full trust. A model that cannot beat "always guess the
+  common class" shows the base rate, with its fitted value struck through beside it.
 
-Blended with the consensus prior in log-odds space: conviction and calibrated odds are
-different quantities, and neither should size a trade alone.
+Degenerate cases (too few labels, single-class, fewer than 15 effective observations) fall
+back to the base rate rather than pretending to a fitted model.
 
 ### Position sizing
 
@@ -426,6 +431,68 @@ that only confirms your strategy is worse than no suite at all.
 Bias controls: no look-ahead, out-of-sample-only statistics, conservative tie-breaking (a
 bar spanning both barriers scores as a stop), and an explicit in-sample vs out-of-sample
 degradation figure.
+
+---
+
+## How much to trust each number
+
+The system measures itself and puts the result beside every signal. The panel titled
+**"Before you act on this"** on the decision card is not boilerplate — each line is computed,
+either from the decision (the meta-model's own validation, which inputs were generated) or
+from `config/calibration.json`, which `npm run calibrate` regenerates by running the whole
+system across the universe. The calibration date travels with the caveats, so a stale
+measurement is visible as stale.
+
+### What the calibration found (2007–2025, 52 names, position horizon)
+
+**The arithmetic is trustworthy.** Heat, R-multiples, correlation, effective bets, sizing
+caps, stop distances — these are measurements of numbers you supplied, covered by 39
+tests. Rely on them.
+
+**The composite score overstates its own breadth.** The nine voting agents behave like
+**3.8 independent opinions**; the trend-following cluster correlates at r = 0.74–0.86, so
+"nine agents agree" is mostly one view restated. The decision card shows
+`9 agents ≈ 3.8 independent` under the composite.
+
+**The chart-pattern detector over-fires.** "Double Bottom" is detected in ~70% of the
+universe. A pattern found in most charts carries almost no information; the card says so
+whenever that pattern is the one detected.
+
+**The meta-model has no out-of-sample skill on most names.** Its 4,500 training labels
+contain only ~60–80 effectively independent outcomes once 252-day overlapping windows are
+corrected for (López de Prado's sample uniqueness). On a purged, embargoed holdout it
+fails to beat "always predict the majority class" for most names. Because you asked to keep
+the number on screen, `P(profit)` is now **shrunk toward the historical base rate in
+proportion to demonstrated out-of-sample lift** — a model with no skill shows exactly the
+base rate, and the discarded fitted value is displayed struck through beside it.
+
+**The primary rule reduces drawdown; it does not add return.** Pooled across 1,671 trades
+with a buy-and-hold benchmark and a bootstrap that resamples whole tickers:
+
+```
+                     strategy    buy & hold
+median CAGR           10.6%        15.4%
+median max drawdown   55.7%        67.7%     shallower on 43/52 names
+per-trade excess      +1.4%   95% CI [0.3%, 2.5%]   — real, but small
+beat buy-and-hold on  6 / 52 names
+```
+
+Risk-adjusted (return/vol, Calmar) it is a coin flip against simply holding. Whether
+trading 4–5 points of CAGR for 12–16 points of drawdown is worthwhile is a preference, not
+an edge. This finding is printed on every decision.
+
+**Survivorship bias flatters everything above.** The universe is today's large caps, which
+by construction survived and grew. Buy-and-hold on such names is an unfairly strong
+benchmark; on a point-in-time universe the gap would narrow by an unknown amount.
+
+### Recalibrating
+
+```bash
+npm run calibrate     # ~60s with live data; rewrites config/calibration.json
+```
+
+Run it after changing agents, thresholds, the universe or the horizon. The file is
+committed so a fresh clone carries the last measurement.
 
 ---
 
@@ -555,6 +622,7 @@ mirrored orchestration events.
 | `HARD_MAX_POSITION_PCT` | `5.0` | Single-idea position ceiling |
 | `MAX_PORTFOLIO_HEAT_PCT` | `6.0` | Aggregate open-risk ceiling |
 | `KELLY_FRACTION` | `0.25` | Quarter-Kelly |
+| `TRADING_HORIZON` | `POSITION` | `SWING` (weeks–months: 2×ATR stop, 60-day barrier) or `POSITION` (months–years: 4×ATR stop, 252-day barrier, 5 years of context). Sets every barrier and the meta-model's label window |
 
 Every external dependency degrades independently: no Mongo means an in-memory store, no
 Kafka means an in-process EventEmitter, no network means synthetic data.
@@ -564,7 +632,8 @@ Kafka means an in-process EventEmitter, no network means synthetic data.
 ## Testing
 
 ```bash
-npm test        # 32 unit tests, hermetic and offline (~150ms)
+npm test        # 39 unit tests, hermetic and offline (~250ms)
+npm run calibrate  # measures the system against itself; feeds the on-screen caveats
 npm run smoke   # 29 API tests against a running server
 ```
 
